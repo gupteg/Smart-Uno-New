@@ -804,3 +804,44 @@ body {
 /* ─────────────────────────────────────────────────────────────────────────── */
 /* END BRANCH C Styles                                                          */
 /* ─────────────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Fix 1: Robo Thinking Animation                                              */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+@keyframes thinking-pulse {
+    0%   { opacity: 1; }
+    50%  { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+.robo-thinking {
+    display: inline-block;
+    font-size: 0.78em;
+    color: #90bfff;
+    font-style: italic;
+    margin-left: 8px;
+    animation: thinking-pulse 1.4s ease-in-out infinite;
+    vertical-align: middle;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Fix 3: Configure AI Players button in host lobby controls                   */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+#configure-ai-btn {
+    background: linear-gradient(135deg, #1e3a5f, #152a44);
+    color: #90bfff;
+    border: 1px solid #3a6096;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+#configure-ai-btn:hover {
+    background: linear-gradient(135deg, #2c5f9e, #1e3a5f);
+    border-color: #5a90c6;
+}
