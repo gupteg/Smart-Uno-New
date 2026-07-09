@@ -29,8 +29,8 @@ const DISCONNECT_GRACE_PERIOD = 60000; // 60 seconds
 const HOST_PASSWORD = process.env.HOST_PASSWORD || null;
 
 // --- BRANCH C: Robo AI runtime state ---
-const ROBO_THINK_TIME = 1000;  // ms delay before robo acts (visual readability)
-const ROBO_TIMEOUT    = 10000; // ms before robo falls back to random legal move
+const ROBO_THINK_TIME = 15000; // ms delay before robo acts (visual readability)
+const ROBO_TIMEOUT    = 10000; // ms allowed for strategy.makeMove() to resolve
 let roboInstances  = new Map(); // Map<playerId, RoboPlayer> — never serialised to client
 let roboTurnPending = false;    // Prevents double-scheduling
 // --- END BRANCH C state ---
