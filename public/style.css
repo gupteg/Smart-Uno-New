@@ -1,0 +1,668 @@
+/* --- *** MODIFIED: Added Lobby & Host Control Styles *** --- */
+body {
+  /* MODIFIED: Font */
+  font-family: Helvetica, Arial, sans-serif;
+  background-color: #006a4e;
+  padding: 10px;
+  margin: 0;
+  min-height: 100vh;
+  box-sizing: border-box;
+  color: #333;
+  width: 100%;
+  max-width: 100%;
+}
+
+#join-screen, #lobby-screen {
+  background-color: #f0f0f0;
+  padding: 30px;
+  border-radius: 10px;
+  max-width: 450px; /* Slightly wider */
+  margin: 50px auto;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+#join-screen h1, #lobby-screen h2 { margin-top: 0; color: #333; }
+#player-name-input { width: 100%; padding: 12px; font-size: 1.2em; margin-bottom: 20px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 5px; }
+#join-game-btn, #lobby-screen button { padding: 12px 24px; font-size: 1.2em; cursor: pointer; border-radius: 8px; border: 2px solid #333; }
+#player-list { list-style-type: none; padding: 0; margin: 20px 0; text-align: left; }
+
+#player-list li {
+  background-color: #e9e9e9;
+  padding: 10px 15px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #444;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.player-name { /* Target player name span if needed */ }
+.ready-status { font-weight: bold; margin-right: 10px; } /* Style for ready status */
+
+.kick-btn { padding: 4px 10px; font-size: 0.9em; font-weight: bold; color: white; background-color: #ff5555; border: 1px solid #cc4444; border-radius: 5px; cursor: pointer; margin-left: 10px; }
+.kick-btn:hover { background-color: #cc4444; }
+
+.lobby-actions { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
+#ready-btn:disabled { background-color: #99cc99; border-color: #669966; cursor: not-allowed; }
+#host-controls { display: flex; flex-direction: column; gap: 10px; align-items: stretch; width: 100%; }
+#host-controls input { padding: 12px; font-size: 1em; border: 2px solid #ccc; border-radius: 5px; }
+.danger-btn { background-color: #cc4444; border-color: #aa2222; color: white; }
+.danger-btn:hover { background-color: #aa2222; border-color: #880000; }
+
+#host-message { font-style: italic; color: #666; margin-top: 15px; }
+
+/* --- *** NEW: Claim Host Section Style *** --- */
+#claim-host-section {
+    flex-direction: column;
+    align-items: stretch; /* Make input/button full width */
+}
+#claim-host-section input {
+    padding: 12px;
+    font-size: 1em;
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    margin-bottom: 10px; /* Add space between input and button */
+}
+/* --- *** END NEW STYLE *** --- */
+/* --- *** END Lobby Styles *** --- */
+
+
+#game-board { height: 100%; display: flex; gap: 10px; position: relative; padding-top: 45px; box-sizing: border-box; }
+#action-bar { position: absolute; top: 0; left: 0; width: 100%; background-color: rgba(0, 0, 0, 0.6); color: #ffc107; text-align: center; padding: 8px 0; font-size: 1.2em; font-weight: bold; z-index: 10; box-sizing: border-box; text-shadow: 1px 1px 2px black; }
+
+.hidden {
+    display: none !important;
+}
+
+#left-column { flex: 3; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; padding-right: 10px; }
+
+#right-column {
+  flex: 1; display: flex; flex-direction: column; justify-content: flex-start; /* Changed */ align-items: center; gap: 20px; padding: 10px; background-color: rgba(0,0,0,0.2); border-radius: 10px; overflow-y: auto;
+  min-width: 420px; /* Prevent compression */
+  overflow-x: hidden; /* Clip internal overflow */
+}
+
+.player-area { padding: 10px; border: 3px solid transparent; border-radius: 10px; background-color: rgba(0,0,0,0.1); transition: all 0.3s ease; }
+.player-area.active-player { border-color: #ffc107; box-shadow: 0 0 15px #ffc107; }
+.player-info { color: white; margin-bottom: 8px; font-size: 1.2em; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; justify-content: space-between; align-items: center; }
+.mark-afk-btn { padding: 3px 8px; font-size: 0.8em; font-weight: bold; color: #333; background-color: #ffc107; border: 1px solid #cc8e00; border-radius: 5px; cursor: pointer; margin-left: 10px; white-space: nowrap; }
+.mark-afk-btn:hover { background-color: #e6a700; }
+.player-score { font-size: 0.8em; font-weight: normal; color: #f0f0f0; opacity: 0.9; margin-left: 8px; }
+.host-indicator { filter: drop-shadow(0 0 2px gold); }
+.card-container { display: flex; flex-wrap: wrap; gap: 8px; min-height: 125px; position: relative; }
+.card { width: 80px; height: 120px; border: 2px solid #333; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-weight: bold; color: white; text-shadow: 1px 1px 2px black; font-size: 32px; overflow: hidden; user-select: none; transition: transform 0.3s ease-in-out, box-shadow 0.3s ease; }
+.card.dragging { opacity: 0.8; transform: scale(1.1) rotate(3deg); box-shadow: 0 15px 25px rgba(0,0,0,0.3); cursor: grabbing; }
+.card .number-circle { background-color: white; color: black; border-radius: 50%; border: 2px solid #333; width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; text-shadow: none; }
+.card .action-text { transform: rotate(-35deg); font-size: 20px; letter-spacing: 1px; text-align: center; }
+.card.Red { background-color: #ff5555; } .card.Green { background-color: #55aa55; } .card.Blue { background-color: #5555ff; } .card.Yellow { background-color: #ffaa00; } .card.Black { background-color: #333333; }
+.card.clickable:hover { transform: translateY(-10px); cursor: pointer; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
+.card-back { background-color: #222; }
+#piles-area .card { width: 146px; height: 220px; }
+.card.uno-warning { animation: more-prominent-flash 1.5s infinite ease-in-out; background-color: #222; }
+.card.uno-warning span { font-size: 38px; font-weight: bold; color: #ff5555; text-shadow: 2px 2px 4px black; transform: rotate(-15deg); white-space: nowrap; }
+#piles-area { color: white; position: relative; }
+.pile-wrapper { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.pile-wrapper h4 { margin: 0 0 5px 0; color: white; font-weight: bold; text-shadow: 1px 1px 2px black; }
+.pile-count { color: white; font-size: 1.1em; font-weight: bold; text-shadow: 1px 1px 2px black; }
+.piles-container { display: flex; justify-content: center; align-items: center; gap: 30px; text-align: center; position: relative; }
+#discard-pile-dropzone { border: 3px dashed transparent; padding: 5px; border-radius: 12px; transition: all 0.3s ease; }
+#discard-pile-dropzone.over { border-color: #ffc107; background-color: rgba(255, 193, 7, 0.2); }
+.action-buttons { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; margin-top: auto; /* Push buttons down */ }
+.action-buttons button { padding: 12px 24px; font-size: 18px; cursor: pointer; border-radius: 8px; border: 2px solid #333; width: 100%; }
+#arrangeHandBtn, #showDiscardPileBtn, #show-log-btn { background-color: #6c757d; border-color: #5a6268; color: white; } /* Added #show-log-btn */
+
+/* --- *** MODIFIED: Increase Draw button height and gaps *** --- */
+#drawCardBtn {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+#arrangeHandBtn {
+  margin-bottom: 7px;
+}
+#showDiscardPileBtn {
+  margin-top: 7px;
+}
+/* --- *** END MODIFICATION *** --- */
+
+#unoBtn { width: 120px; height: 120px; border-radius: 50%; border-color: #333; border-width: 3px; font-weight: bold; font-size: 32px; box-shadow: 0 0 10px rgba(0,0,0,0.5); color: white; text-shadow: 1px 1px 2px black; transition: all 0.3s ease; }
+
+/* --- *** MODIFICATION: Styles for Parchment Modals (Scoreboards) *** --- */
+.modal {
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+}
+.modal-content {
+    background-color: rgba(40, 40, 40, 0.95); /* Default dark style */
+    color: white;
+    border: 2px solid #ffc107;
+    box-shadow: 0 0 30px rgba(255, 193, 7, 0.5);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    max-width: 90%;
+    width: auto;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+/* Apply parchment style ONLY to score modals */
+#end-of-round-div .modal-content,
+#final-score-modal .modal-content {
+    background-color: #D2B48C; /* --parchment-bg */
+    color: #4a2c2a; /* --dark-text */
+    border: 5px solid #8c5b4f; /* --teak-light */
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    border-radius: 15px;
+    max-width: 600px; /* Max width for score tables */
+}
+#discard-wilds-modal .modal-content.wide { max-width: 800px; } /* Keep wide style */
+/* Headers */
+.modal-content h3, .modal-content h2, .modal-content p { cursor: move; user-select: none; }
+/* Dark modal headers */
+#color-picker-modal .modal-content h3,
+#pick-until-modal .modal-content h3,
+#swap-modal .modal-content h3,
+#drawn-wild-modal .modal-content h3,
+#deal-choice-modal .modal-content h3,
+#confirm-end-game-modal .modal-content h3,
+#afk-notification-modal .modal-content h3,
+#discard-pile-modal .modal-content h3,
+#confirm-afk-modal .modal-content h3,
+#discard-wilds-modal .modal-content h3,
+#game-log-modal .modal-content h3,
+#confirm-hard-reset-modal .modal-content h3 { /* Added hard reset */
+    color: #ffc107;
+    text-shadow: 1px 1px 2px black;
+}
+/* Parchment modal headers */
+#end-of-round-div .modal-content h2,
+#final-score-modal .modal-content h2 {
+    color: #4a2c2a;
+    text-shadow: none;
+    margin-top: 0;
+}
+.modal-scrollable-content {
+    overflow-y: auto;
+    padding: 15px 5px 15px 0;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    min-height: 100px; /* Ensure minimum height */
+}
+/* --- *** END Modal Style Update *** --- */
+
+
+/* --- *** MODIFICATION: New Uniform Score Table Styles *** --- */
+.uniform-score-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #4a2c2a; /* --dark-text */
+    background-color: #D2B48C; /* --parchment-bg */
+}
+.uniform-score-table th,
+.uniform-score-table td {
+    border: 1px solid #8c5b4f; /* --teak-light */
+    padding: 8px 12px;
+    text-align: left;
+}
+.uniform-score-table th {
+    background-color: #8c5b4f; /* --teak-light */
+    color: #f5f5dc; /* --light-text */
+}
+/* Right-align player name headers */
+.uniform-score-table th:not(:first-child) {
+    text-align: right;
+}
+.uniform-score-table tbody tr:nth-child(even) {
+    background-color: rgba(0,0,0,0.05); /* Subtle stripe */
+}
+.uniform-score-table tfoot td {
+    background-color: rgba(0,0,0,0.1);
+    font-weight: bold;
+    border-top: 2px solid #8c5b4f;
+}
+.uniform-score-table .score-col {
+    text-align: right;
+    font-weight: bold;
+    width: 80px; /* Align columns */
+}
+.uniform-score-table tr.winner-row td {
+    background-color: #fffbe6;
+    color: #997000;
+    font-weight: bold;
+    animation: pulse-gold 2s infinite ease-in-out;
+}
+@keyframes pulse-gold {
+    0%, 100% { background-color: #fffbe6; }
+    50% { background-color: #fff5cc; }
+}
+.uniform-score-table tbody tr td:first-child { /* Right-align round numbers */
+    text-align: right;
+    padding-right: 15px;
+}
+/* --- *** END New Table Styles *** --- */
+
+
+/* --- *** MODIFICATION: Copied 7oH Final Hand Styles *** --- */
+.final-hands-header {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    color: #4a2c2a; /* --dark-text */
+    border-top: 1px solid #8c5b4f; /* --teak-light */
+    padding-top: 15px;
+    text-align: left;
+}
+#round-over-hands {
+    max-height: 25vh;
+    overflow-y: auto;
+    background-color: rgba(0,0,0,0.1); /* Darker stripe */
+    border-radius: 5px;
+    padding: 10px;
+}
+#round-over-hands .player-hand-display {
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed #8c5b4f; /* --teak-light */
+    text-align: left;
+}
+#round-over-hands .player-hand-display:last-child {
+    border-bottom: none;
+}
+#round-over-hands .player-hand-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+}
+#round-over-hands .player-hand-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+.final-card-img {
+    width: 40px;
+    height: 60px; /* 1.5 ratio */
+    border: 1px solid #333;
+    border-radius: 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    color: white;
+    text-shadow: 1px 1px 1px black;
+    font-size: 16px;
+    overflow: hidden;
+    user-select: none;
+    background-color: #333; /* Fallback */
+}
+.final-card-img .number-circle {
+    background-color: white;
+    color: black;
+    border-radius: 50%;
+    border: 1px solid #333;
+    width: 25px;
+    height: 25px;
+    font-size: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-shadow: none;
+}
+.final-card-img .action-text {
+    transform: rotate(-35deg);
+    font-size: 8px;
+    letter-spacing: 0;
+    text-align: center;
+}
+.final-card-img.Red { background-color: #ff5555; }
+.final-card-img.Green { background-color: #55aa55; }
+.final-card-img.Blue { background-color: #5555ff; }
+.final-card-img.Yellow { background-color: #ffaa00; }
+.final-card-img.Black { background-color: #333333; }
+/* --- *** END 7oH Final Hand Styles *** --- */
+
+.modal-content.wide { max-width: 800px; }
+.modal-buttons-container { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+.color-options, .action-options { display: flex; gap: 10px; margin-top: 15px; }
+.color-options { justify-content: center; }
+.action-options { flex-direction: column; }
+.color-btn { width: 60px; height: 60px; border: 2px solid #333; border-radius: 5px; cursor: pointer; }
+.color-btn[data-color="Red"] { background-color: #ff5555; } .color-btn[data-color="Green"] { background-color: #55aa55; } .color-btn[data-color="Blue"] { background-color: #5555ff; } .color-btn[data-color="Yellow"] { background-color: #ffaa00; }
+
+#uno-announcement-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.5s ease-in-out; }
+#uno-announcement-text { font-size: 15vw; font-weight: bold; color: #ffc107; text-shadow: 5px 5px 10px black; transform: scale(0.5); transition: transform 0.5s ease-in-out; }
+#uno-announcement-overlay.show { opacity: 1; pointer-events: all; }
+#uno-announcement-overlay.show #uno-announcement-text { transform: scale(1); }
+
+/* --- *** REMOVED: Old .score-table, .final-table, .winner-row styles *** --- */
+
+.player-area.has-uno { animation: flashing-red-border 1.5s infinite ease-in-out; }
+.player-area.uno-unsafe { border-color: #ff5555 !important; background-color: rgba(255, 85, 85, 0.1); }
+.player-area.uno-declared { border-color: #00ff00 !important; box-shadow: 0 0 15px #00ff00; }
+#unoBtn.uno-ready:not(:disabled) { transform: scale(1.1); box-shadow: 0 0 25px 8px rgba(255, 255, 255, 0.7); border-color: white; cursor: pointer; }
+#unoBtn.pressed { transform: scale(1.05); }
+@keyframes flashing-red-border { 0%, 100% { border-color: #ff5555; box-shadow: 0 0 20px rgba(255, 85, 85, 0.8); } 50% { border-color: transparent; box-shadow: none; } }
+@keyframes more-prominent-flash { 0%, 100% { box-shadow: 0 0 25px 8px rgba(255, 0, 0, 0.9); transform: scale(1.05); } 50% { box-shadow: none; transform: scale(1); } }
+@keyframes invalid-move-shake { 10%, 90% { transform: translateX(-1px) rotate(-1deg); } 20%, 80% { transform: translateX(2px) rotate(2deg); } 30%, 50%, 70% { transform: translateX(-4px) rotate(-3deg); } 40%, 60% { transform: translateX(4px) rotate(3deg); } }
+.card.invalid-shake { animation: invalid-move-shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+#invalid-move-callout { position: absolute; display: none; padding: 6px 12px; background-color: rgba(200, 20, 20, 0.85); color: white; font-weight: bold; border-radius: 5px; font-size: 14px; z-index: 50; pointer-events: none; }
+#invalid-move-callout.show { display: block; animation: fade-in-out 1.5s ease-in-out; }
+@keyframes fade-in-out { 0% { opacity: 0; transform: translateY(10px); } 20% { opacity: 1; transform: translateY(0); } 80% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(10px); } }
+.flying-card { position: absolute; z-index: 300; transition: transform 0.8s ease-in-out, top 0.8s ease-in-out, left 0.8s ease-in-out; }
+/* REMOVED: #game-log-container and #game-log-list styles */
+#drawn-wild-card-name { font-size: 1.4em; font-weight: bold; color: #ffc107; text-shadow: 1px 1px 2px black; margin: 10px 0; text-transform: uppercase; }
+
+/* --- *** REVERTED: General button styles restored *** --- */
+.modal-buttons-container button, #next-round-ok-btn, .lobby-actions button {
+    font-weight: bold;
+    color: #333;
+    border: 2px solid #ccc;
+    background-color: #f0f0f0;
+    transition: all 0.2s ease;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 8px; /* Keep consistent radius */
+}
+.modal-buttons-container button:disabled, #next-round-ok-btn:disabled, .action-buttons button:disabled, .lobby-actions button:disabled {
+    background-color: #999;
+    border-color: #777;
+    color: #eee;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    opacity: 0.7;
+}
+.modal-buttons-container button:hover:not(:disabled), #next-round-ok-btn:hover:not(:disabled), .lobby-actions button:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+/* Restore original button colors */
+#next-round-btn, #confirm-end-yes-btn, #final-score-ok-btn, #next-round-ok-btn, #im-back-btn, #discard-pile-ok-btn, #confirm-afk-yes-btn, #discard-wilds-ok-btn, #game-log-ok-btn {
+    background-color: #55aa55; border-color: #448844; color: white;
+}
+#end-game-round-btn, #confirm-end-no-btn, #confirm-afk-no-btn, #confirm-reset-no-btn {
+    background-color: #ff5555; border-color: #cc4444; color: white;
+}
+.danger-btn, #confirm-reset-yes-btn {
+    background-color: #cc4444; border-color: #aa2222; color: white;
+}
+.danger-btn:hover, #confirm-reset-yes-btn:hover {
+    background-color: #aa2222; border-color: #880000;
+}
+/* Ensure action buttons keep their style */
+.action-buttons button {
+    padding: 12px 24px;
+    font-size: 18px;
+    width: 100%;
+}
+#drawCardBtn {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+#arrangeHandBtn, #showDiscardPileBtn, #show-log-btn { background-color: #6c757d; border-color: #5a6268; color: white; }
+#unoBtn { width: 120px; height: 120px; border-radius: 50%; border-color: #333; border-width: 3px; font-weight: bold; font-size: 32px; box-shadow: 0 0 10px rgba(0,0,0,0.5); color: white; text-shadow: 1px 1px 2px black; }
+/* --- *** END REVERTED BUTTON STYLES *** --- */
+
+
+/* --- *** MODIFICATION: Specific Modal Layouts *** --- */
+/* B. Deal Cards Modal */
+#deal-choice-modal .modal-content {
+    display: flex;
+    flex-direction: row; /* Change to row */
+    align-items: center; /* Vertically center */
+    justify-content: center; /* Center horizontally */
+    gap: 15px; /* Space between input and button */
+    padding: 30px; /* Add more padding */
+}
+#deal-choice-modal p { /* Hide original paragraph */
+    display: none;
+}
+#deal-cards-input {
+    width: 80px; /* Smaller width */
+    font-size: 2.5em; /* Larger font size */
+    text-align: center;
+    padding: 10px;
+    box-sizing: border-box;
+}
+#deal-cards-btn {
+    padding: 15px 30px; /* Larger padding */
+    font-size: 1.5em; /* Larger font size */
+}
+
+/* C. Wild Swap Modal */
+#swap-modal .action-options {
+    gap: 15px; /* Increased gap */
+}
+#swap-modal .player-swap-btn {
+    padding: 12px 24px; /* Increased padding */
+    font-size: 1.1em; /* Increased font size */
+}
+
+/* D. Wild Pick Until Modal */
+#pick-until-modal .action-options {
+    gap: 20px; /* Increased gap */
+}
+#pick-until-modal .action-options button {
+    padding: 15px 25px; /* Increased padding */
+    font-size: 1.1em; /* Increased font size */
+}
+
+/* --- *** NEW: Drawn Wild Card Modal *** --- */
+#drawn-wild-modal .action-options {
+    gap: 20px; /* Increased gap */
+}
+#drawn-wild-modal .action-options button {
+    padding: 15px 25px; /* Increased padding */
+    font-size: 1.1em; /* Increased font size */
+}
+/* --- *** END NEW *** --- */
+/* --- *** END MODIFICATION *** --- */
+
+
+/* --- MODIFIED: Standardized Toast --- */
+#toast-notification {
+  position: fixed;
+  bottom: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 15px 30px;
+  background-color: rgba(0,0,0,0.9);
+  color: #daa520; /* UPDATED */
+  font-weight: bold;
+  border-radius: 25px;
+  border: 2px solid #daa520; /* UPDATED BORDER */
+  z-index: 500;
+  opacity: 0;
+  transition: all 0.5s ease-in-out;
+  pointer-events: none;
+  font-size: 2.5em; /* UPDATED SIZE */
+  white-space: normal;
+  max-width: 90%;
+  text-align: center;
+}
+#toast-notification.show { opacity: 1; transform: translate(-50%, 10px); }
+/* --- END MODIFICATION --- */
+
+
+.player-area.disconnected { opacity: 0.5; background-color: rgba(100, 100, 100, 0.2); border-color: #666 !important; box-shadow: none !important; }
+.player-area.disconnected:not(.removed) .player-info > span:first-child::after { content: '(Disconnected)'; font-style: italic; font-weight: normal; color: #ffdddd; margin-left: 10px; }
+.player-area.removed .player-info > span:first-child::after { content: '(Removed)'; font-style: italic; font-weight: normal; color: #aaa; margin-left: 10px; }
+.player-area.removed { opacity: 0.4; border-style: dashed; }
+#discard-pile-list { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; align-items: center; padding: 10px; background-color: rgba(0,0,0,0.2); border-radius: 5px; }
+.discard-item { display: flex; align-items: center; gap: 15px; width: 100%; }
+.discard-item .card { width: 60px; height: 90px; font-size: 24px; flex-shrink: 0; }
+.discard-item .card .number-circle { width: 35px; height: 35px; }
+.discard-item .card .action-text { font-size: 14px; }
+.discard-item-player { font-size: 1.1em; font-weight: bold; text-align: left; }
+#direction-arrow { width: 60px; height: 220px; transition: transform 0.5s ease; transform-origin: center center; transform: rotate(0deg); }
+#direction-arrow svg { display: block; width: 100%; height: 100%; animation: pulse 2s infinite ease-in-out; }
+#direction-arrow svg path { fill: white; transition: fill 0.3s ease; }
+#direction-arrow.reversed { transform: rotate(180deg); }
+/* --- *** MODIFICATION: Removed opacity from pulse animation *** --- */
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+/* --- *** END MODIFICATION *** --- */
+@media (max-width: 768px) {
+    body { padding: 5px; padding-bottom: 240px; overflow-y: auto; }
+    #game-board { flex-direction: column; padding-top: 40px; height: auto; }
+    #left-column { flex: 1; padding-right: 0; gap: 8px; overflow-y: visible; }
+    #right-column { flex: none; width: 100%; flex-direction: column; align-items: center; gap: 15px; padding: 5px 0; overflow-y: visible; min-width: 0; overflow-x: visible; }
+    .player-area { width: 100%; box-sizing: border-box; }
+    #piles-area .card { width: 100px; height: 150px; }
+    .action-buttons { position: fixed; bottom: 0; left: 0; flex-direction: row; flex-wrap: wrap; background-color: rgba(0,0,0,0.7); padding: 10px; box-sizing: border-box; gap: 10px; z-index: 50; }
+    #unoBtn { width: 60px; height: 60px; font-size: 20px; order: 2; }
+    .action-buttons button { font-size: 14px; padding: 10px; flex: 1 1 40%; min-width: 100px; }
+    #drawCardBtn { order: 1; }
+    #arrangeHandBtn { order: 3; }
+    #showDiscardPileBtn { order: 4; }
+    #show-log-btn { order: 5; } /* NEW */
+    #endGameBtn { order: 6; }
+    /* REMOVED: Game Log Container */
+    .card { width: 60px; height: 90px; font-size: 24px; }
+    .card .number-circle { width: 35px; height: 35px; }
+    .card .action-text { font-size: 14px; }
+    .player-info { font-size: 1em; }
+    .card-container { min-height: 95px; }
+
+    /* --- MODIFIED: Standardized Toast (Mobile) --- */
+    #toast-notification { padding: 12px 20px; font-size: 1.2em; bottom: 180px; max-width: 90%; white-space: normal; }
+
+    #direction-arrow { height: 150px; width: 40px; }
+
+    /* --- MODIFICATION: Mobile modal styles --- */
+    .modal-content {
+        max-width: 95%;
+        width: 95%;
+        max-height: 80vh;
+    }
+    #discard-wilds-modal .modal-content.wide {
+        max-width: 95%;
+    }
+    /* --- MODIFICATION: Mobile Deal Cards Modal --- */
+    #deal-choice-modal .modal-content {
+        flex-direction: column; /* Stack on mobile */
+        gap: 10px;
+    }
+    #deal-cards-input {
+        width: 100px; /* Wider on mobile */
+        font-size: 2em; /* Slightly smaller */
+    }
+    #deal-cards-btn {
+        padding: 10px 20px;
+        font-size: 1.2em;
+    }
+}
+#discard-wilds-results { display: flex; flex-direction: column; gap: 15px; max-height: 50vh; overflow-y: auto; padding: 10px; background-color: rgba(0,0,0,0.2); border-radius: 5px; text-align: left; }
+.discard-result-player { border-bottom: 1px solid #555; padding-bottom: 10px; }
+.discard-result-player:last-child { border-bottom: none; }
+.discard-result-player-name { font-size: 1.1em; font-weight: bold; margin: 0 0 10px 0; }
+.discard-result-cards { display: flex; flex-wrap: wrap; gap: 8px; }
+.discard-result-cards .card { width: 60px; height: 90px; font-size: 24px; }
+.discard-result-cards .card .number-circle { width: 35px; height: 35px; }
+.discard-result-cards .card .action-text { font-size: 14px; }
+.discard-wilds-empty-msg { text-align: center; width: 100%; color: #ffc107; font-style: italic; }
+
+/* --- *** NEW: Winner "Rain" Animation (Replaces Confetti/Fireworks) *** --- */
+.fullscreen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    color: white;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none; /* Allows clicks through if needed, though it's hidden */
+}
+.fullscreen-overlay.hidden {
+    display: none;
+}
+#winner-announcement-text {
+    font-size: clamp(2.5em, 8vw, 6em);
+    margin: 0;
+    font-weight: bold;
+    animation: flash-colors 1s infinite alternate;
+}
+#winner-announcement-subtext {
+    font-size: clamp(1em, 3vw, 1.5em);
+    margin-top: 10px;
+    color: #eee;
+}
+@keyframes flash-colors {
+    0% { color: #ffeb3b; text-shadow: 0 0 10px #ffeb3b; }
+    50% { color: #ff9800; text-shadow: 0 0 10px #ff9800; }
+    100% { color: #e91e63; text-shadow: 0 0 10px #e91e63; }
+}
+#winner-animation-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+}
+.rain-element {
+    position: absolute;
+    bottom: 100%;
+    font-size: 1.5em;
+    animation: fall linear infinite;
+    opacity: 0.8;
+}
+@keyframes fall {
+    to { transform: translateY(100vh); opacity: 0; }
+}
+/* --- *** END NEW ANIMATION *** --- */
+
+/* --- *** NEW: Game Log Modal Styles *** --- */
+#game-log-modal .modal-content {
+    width: 600px; /* Adjust as needed */
+    max-width: 90%;
+}
+#game-log-modal-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    background-color: rgba(0,0,0,0.2);
+    border-radius: 5px;
+    padding: 10px;
+    text-align: left;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+#game-log-modal-content div {
+    padding: 3px 0;
+    border-bottom: 1px dashed #555;
+}
+#game-log-modal-content div:last-child {
+    border-bottom: none;
+}
+/* --- *** END NEW *** --- */
+
+
+/* --- *** NEW: Style for wait message *** --- */
+#lobby-wait-message {
+    color: #4a2c2a; /* --dark-text */
+    font-size: 0.9em;
+}
+/* --- END --- */
