@@ -1170,7 +1170,9 @@ io.on('connection', (socket) => {
       
       const hostData = currentPlayers.find(p => p.playerId === host.playerId); 
       players = [{ playerId: hostData.playerId, socketId: host.socketId, name: hostData.name, isHost: true, isReady: true, active: true }]; 
-      io.emit('lobbyUpdate', players); 
+      io.emit('lobbyUpdate', players);
+      // Reload host's browser for a fully clean slate — send their ID so they auto-rejoin
+      socket.emit('hardResetComplete', { hostPlayerId: hostData.playerId, hostName: hostData.name });
     } 
   });
   socket.on('playCard', ({ cardIndex }) => { if (!gameState || gameState.phase !== 'Playing' || gameState.isPaused) return; const playerIndex = gameState.players.findIndex(p => p.socketId === socket.id); if (playerIndex !== -1) { handleCardPlay(playerIndex, cardIndex); if (gameState && gameState.phase !== 'RoundOver' && gameState.phase !== 'GameOver') { io.emit('updateGameState', gameState); scheduleRoboTurnIfNeeded(); /* BRANCH C */ } } });
