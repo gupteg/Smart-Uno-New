@@ -261,6 +261,14 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('forceDisconnect', () => { console.log("Received force disconnect from server."); showToast("You have been disconnected by the host."); sessionStorage.removeItem('unoPlayerId'); sessionStorage.removeItem('unoPlayerName'); myPersistentPlayerId = null; setTimeout(() => { location.reload(); }, 1500); });
+
+    // Hard Reset: server sends host's ID so they auto-rejoin after the clean reload
+    socket.on('hardResetComplete', ({ hostPlayerId, hostName }) => {
+        sessionStorage.setItem('unoPlayerId',   hostPlayerId);
+        sessionStorage.setItem('unoPlayerName', hostName);
+        myPersistentPlayerId = hostPlayerId;
+        setTimeout(() => location.reload(), 300);
+    });
     
     socket.on('updateGameState', (gameState) => { 
         handleMoveAnnouncement(gameState, previousGameState);
