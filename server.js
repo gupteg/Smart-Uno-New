@@ -32,10 +32,12 @@ const DISCONNECT_GRACE_PERIOD = 60000; // 60 seconds
 const HOST_PASSWORD = process.env.HOST_PASSWORD || null;
 
 // --- BRANCH C: Robo AI runtime state ---
-const ROBO_THINK_TIME     = 7000; // ms — first voluntary action (player sees robo "thinking")
-const ROBO_SECONDARY_TIME =  1000; // ms — follow-on actions (color choice, swap target, pick-until each draw)
-const ROBO_PENALTY_TIME   =  3000; // ms — forced penalty draw (Draw Two / Wild Draw Four on robo)
-const ROBO_TIMEOUT        = 10000; // ms — max allowed for strategy.makeMove() to resolve
+const ROBO_THINK_TIME      = 7000;  // ms — first voluntary action, robo has a genuine choice among playable card(s)
+const ROBO_DRAW_TIME       = 2000;  // ms — first voluntary action, robo has NO legal card and must draw
+const ROBO_UNO_FINISH_TIME = 1000;  // ms — first voluntary action, robo declared UNO holding 1 (playable) card
+const ROBO_SECONDARY_TIME  = 1000;  // ms — follow-on actions (color choice, swap target, pick-until each draw)
+const ROBO_PENALTY_TIME    = 3000;  // ms — forced penalty draw (Draw Two / Wild Draw Four on robo)
+const ROBO_TIMEOUT         = 10000; // ms — max allowed for strategy.makeMove() to resolve
 let roboInstances  = new Map(); // Map<playerId, RoboPlayer> — never serialised to client
 let roboTurnPending = false;    // Prevents double-scheduling
 // --- Game Recorder instance (enabled only when RECORD_GAMES=true) ---
@@ -344,9 +346,14 @@ function recordCardForRoboMemories(card, playerName) {
 /**
  * Return the appropriate delay before the next robo action.
  *
- * ROBO_THINK_TIME     (10s) — first voluntary action on the robo's turn
- * ROBO_PENALTY_TIME    (3s) — forced penalty draw (Draw Two / Wild Draw Four)
- * ROBO_SECONDARY_TIME  (1s) — all follow-on actions (colour choice, swap, pick-until draws, dealing)
+ * ROBO_PENALTY_TIME     (3s) — forced penalty draw (Draw Two / Wild Draw Four)
+ * ROBO_SECONDARY_TIME   (1s) — all follow-on actions (colour choice, swap, pick-until draws, dealing)
+ *
+ * First voluntary action on the robo's turn (Playing phase, no penalty owed,
+ * not a pick-until target draw) is split three ways based on the robo's hand:
+ *   ROBO_DRAW_TIME       (2s) — no legal card at all, robo must draw
+ *   ROBO_UNO_FINISH_TIME (1s) — declared UNO, holding exactly 1 card, and it's playable
+ *   ROBO_THINK_TIME       (7s) — default: a genuine choice among playable card(s)
  *
  * Called inside scheduleRoboTurnIfNeeded so that the delay is evaluated against
  * the game state at the moment the next robo action is being scheduled, not
@@ -374,11 +381,51 @@ function getRoboDelay() {
             return ROBO_SECONDARY_TIME;
         }
 
-        // First voluntary action on this robo's turn
+        // First voluntary action on this robo's turn — split by hand situation
+        const player = gameState.players[gameState.currentPlayerIndex];
+        if (player) {
+            const topCard = gameState.discardPile[0]?.card;
+            const legal = topCard
+                ? DecisionEngine.getLegalCards(player.hand, topCard, gameState.activeColor, gameState.drawPenalty)
+                : [];
+
+            // No legal card at all — robo must draw. Short pause.
+            if (legal.length === 0) {
+                return ROBO_DRAW_TIME;
+            }
+
+            // Declared UNO, holding exactly one card — since legal.length > 0
+            // here, that one card is necessarily the playable one. Finishing move.
+            if (player.hand.length === 1 && player.unoState === 'declared') {
+                return ROBO_UNO_FINISH_TIME;
+            }
+        }
+
+        // Default: robo has a genuine choice among playable cards
         return ROBO_THINK_TIME;
     }
 
     return ROBO_THINK_TIME; // safe fallback
+}
+
+/**
+ * Weighted random card count for a robo dealer.
+ *   50% -> exactly 7 cards
+ *   30% -> random integer in [5, 9]
+ *   20% -> random integer in [1, 13]
+ * Tiers intentionally overlap (7 is reachable from all three, 5-9 from two) —
+ * this is expected: actual observed frequency of 7 (and of 5-9) will land a
+ * little above the stated percentages as a natural result of layered odds.
+ */
+function getRoboDealCount() {
+    const roll = Math.random();
+    if (roll < 0.5) {
+        return 7;
+    } else if (roll < 0.8) {
+        return Math.floor(Math.random() * 5) + 5; // 5-9 inclusive
+    } else {
+        return Math.floor(Math.random() * 13) + 1; // 1-13 inclusive
+    }
 }
 
 /**
@@ -429,11 +476,12 @@ async function processRoboTurn() {
     if (!gameState || gameState.isPaused) return;
     if (['RoundOver', 'GameOver', 'Lobby'].includes(gameState.phase)) return;
 
-    // ── Dealing phase: robo deals a random number of cards (1–13) ────────────
+    // ── Dealing phase: robo deals a weighted-random number of cards ──────────
+    // 50% -> 7, 30% -> [5,9], 20% -> [1,13]. See getRoboDealCount().
     if (gameState.phase === 'Dealing') {
         const dealer = gameState.players.find(p => p.playerId === gameState.playerChoosingActionId);
         if (!dealer?.isRobo) return;
-        const numCards = Math.floor(Math.random() * 13) + 1;
+        const numCards = getRoboDealCount();
         addLog(`🤖 ${dealer.name} (AI Dealer) deals ${numCards} cards.`);
         gameState.numCardsToDeal = numCards;
         gameState.playerChoosingActionId = null;
@@ -1170,9 +1218,7 @@ io.on('connection', (socket) => {
       
       const hostData = currentPlayers.find(p => p.playerId === host.playerId); 
       players = [{ playerId: hostData.playerId, socketId: host.socketId, name: hostData.name, isHost: true, isReady: true, active: true }]; 
-      io.emit('lobbyUpdate', players);
-      // Reload host's browser for a fully clean slate — send their ID so they auto-rejoin
-      socket.emit('hardResetComplete', { hostPlayerId: hostData.playerId, hostName: hostData.name });
+      io.emit('lobbyUpdate', players); 
     } 
   });
   socket.on('playCard', ({ cardIndex }) => { if (!gameState || gameState.phase !== 'Playing' || gameState.isPaused) return; const playerIndex = gameState.players.findIndex(p => p.socketId === socket.id); if (playerIndex !== -1) { handleCardPlay(playerIndex, cardIndex); if (gameState && gameState.phase !== 'RoundOver' && gameState.phase !== 'GameOver') { io.emit('updateGameState', gameState); scheduleRoboTurnIfNeeded(); /* BRANCH C */ } } });
