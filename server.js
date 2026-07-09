@@ -1,6 +1,7 @@
 const http = require('http');
 const express = require('express');
 const path = require('path');
+const { MongoClient } = require('mongodb');
 const { Server } = require("socket.io");
 require('dotenv').config(); // For HOST_PASSWORD
 
@@ -1264,4 +1265,21 @@ io.on('connection', (socket) => {
 }); // End of io.on('connection', ...)
 
 const PORT = process.env.PORT || 3000;
+// --- TEMPORARY: MongoDB connection test endpoint ---
+app.get('/test-db', async (req, res) => {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) {
+        return res.send('❌ MONGODB_URI environment variable is not set on this server.');
+    }
+    try {
+        const client = new MongoClient(uri);
+        await client.connect();
+        await client.db('admin').command({ ping: 1 });
+        await client.close();
+        res.send('✅ MongoDB Atlas connection successful. Ready to record games.');
+    } catch (err) {
+        res.send(`❌ Connection failed: ${err.message}`);
+    }
+});
+// --- END TEMPORARY test endpoint ---
 server.listen(PORT, () => { console.log(`✅ UNO Server is live and listening on port ${PORT}`); });
