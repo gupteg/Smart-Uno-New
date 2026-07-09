@@ -1,13 +1,15 @@
 const http = require('http');
 const express = require('express');
 const path = require('path');
-const { MongoClient } = require('mongodb');
 const { Server } = require("socket.io");
+const { MongoClient } = require('mongodb');
 require('dotenv').config(); // For HOST_PASSWORD
 
 // --- BRANCH C: Robo Player modules ---
 const { RoboPlayer } = require('./server-src/player');
 const { DecisionEngine, COLORS } = require('./server-src/decision-engine');
+// --- Game Recorder (Part 1 — ML data collection) ---
+const { GameRecorder } = require('./server-src/game-recorder');
 // --- END BRANCH C imports ---
 
 const app = express();
@@ -36,6 +38,8 @@ const ROBO_PENALTY_TIME   =  3000; // ms — forced penalty draw (Draw Two / Wil
 const ROBO_TIMEOUT        = 10000; // ms — max allowed for strategy.makeMove() to resolve
 let roboInstances  = new Map(); // Map<playerId, RoboPlayer> — never serialised to client
 let roboTurnPending = false;    // Prevents double-scheduling
+// --- Game Recorder instance (enabled only when RECORD_GAMES=true) ---
+const recorder = new GameRecorder();
 // --- END BRANCH C state ---
 
 // --- GAME LOGIC FUNCTIONS ---
@@ -150,6 +154,8 @@ function startNewRound(gs) {
     const numPlayers = gs.players.length;
     // BRANCH C: Reset robo card memory at the start of every round
     roboInstances.forEach(robo => robo.resetMemory());
+    // Recorder: begin buffering moves for this round (after roundNumber++ so it's correct)
+    recorder.startRound(gs.roundNumber, gs.numCardsToDeal, gs.players);
 
     // --- *** MODIFIED: Moved log entry to be first *** ---
     const dealer = gs.players[gs.dealerIndex];
@@ -241,7 +247,10 @@ function isMoveValid(playedCard, topCard, activeColor, drawPenalty) { if (drawPe
 function checkIfPlayerMustPlay(player, topCard, activeColor) { if (!player || !player.hand || player.hand.length === 0) { return false; } for (const card of player.hand) { if (card.color !== 'Black') { if (card.color === activeColor || card.value === topCard.value) { return true; } } } return false; }
 function advanceTurn() { if (!gameState) return; const activePlayers = gameState.players.filter(p => p.status === 'Active'); if (activePlayers.length === 0) { addLog("No active players left to advance turn."); return; } const currentPlayer = gameState.players[gameState.currentPlayerIndex]; if (currentPlayer && currentPlayer.unoState === 'declared') { currentPlayer.unoState = 'safe'; } do { const numPlayers = gameState.players.length; gameState.currentPlayerIndex = (gameState.currentPlayerIndex + gameState.playDirection + numPlayers) % numPlayers; } while (gameState.players[gameState.currentPlayerIndex].status !== 'Active'); }
 function applyCardEffect(playedCard) { switch(playedCard.value) { case 'Reverse': if (gameState.players.filter(p=>p.status === 'Active').length > 2) { gameState.playDirection *= -1; } break; case 'Draw Two': case 'Wild Draw Four': const penalty = (playedCard.value === 'Draw Two') ? 2 : 4; gameState.drawPenalty += penalty; break; } }
-function handleEndOfRound(winners) { if (!gameState || gameState.phase === 'RoundOver' || gameState.phase === 'GameOver') return; gameState.phase = 'RoundOver'; gameState.readyForNextRound = []; /* BRANCH C: robos auto-ready */ gameState.players.forEach(p => { if (p.isRobo && p.status === 'Active') gameState.readyForNextRound.push(p.playerId); }); const scoresForRound = []; gameState.players.forEach(p => { const roundScore = (p.status === 'Active' || p.status === 'Disconnected') ? calculateScore(p.hand) : 0; p.score += roundScore; p.scoresByRound.push((p.status === 'Active' || p.status === 'Disconnected') ? roundScore : '-'); scoresForRound.push({ name: p.name, roundScore: roundScore, cumulativeScore: p.score }); }); const winnerNames = winners.map(w => w.name).join(' and '); addLog(`🏁 ${winnerNames} wins the round!`); io.emit('announceRoundWinner', { winnerNames }); io.emit('roundOver', { winnerName: winnerNames, scores: scoresForRound, finalGameState: gameState }); }
+function handleEndOfRound(winners) { if (!gameState || gameState.phase === 'RoundOver' || gameState.phase === 'GameOver') return; gameState.phase = 'RoundOver'; gameState.readyForNextRound = []; /* BRANCH C: robos auto-ready */ gameState.players.forEach(p => { if (p.isRobo && p.status === 'Active') gameState.readyForNextRound.push(p.playerId); }); const scoresForRound = []; gameState.players.forEach(p => { const roundScore = (p.status === 'Active' || p.status === 'Disconnected') ? calculateScore(p.hand) : 0; p.score += roundScore; p.scoresByRound.push((p.status === 'Active' || p.status === 'Disconnected') ? roundScore : '-'); scoresForRound.push({ name: p.name, roundScore: roundScore, cumulativeScore: p.score }); }); const winnerNames = winners.map(w => w.name).join(' and ');
+    // Recorder: save this round's moves to Atlas (non-blocking)
+    recorder.endRound(winners.map(w => w.name)).catch(err => console.error('[Recorder] endRound error:', err));
+    addLog(`🏁 ${winnerNames} wins the round!`); io.emit('announceRoundWinner', { winnerNames }); io.emit('roundOver', { winnerName: winnerNames, scores: scoresForRound, finalGameState: gameState }); }
 function handleCardPlay(playerIndex, cardIndex) { 
     if (!gameState || gameState.phase !== 'Playing' || playerIndex !== gameState.currentPlayerIndex || gameState.isPaused) return; 
     const player = gameState.players[playerIndex]; 
@@ -251,7 +260,13 @@ function handleCardPlay(playerIndex, cardIndex) {
     const actionCardsThatDelayWin = ['Draw Two', 'Wild Draw Four', 'Wild Pick Until']; 
     
     if (isMoveValid(playedCard, topCard, gameState.activeColor, gameState.drawPenalty)) { 
-        io.emit('animatePlay', { playerId: player.playerId, card: playedCard, cardIndex: cardIndex }); 
+        io.emit('animatePlay', { playerId: player.playerId, card: playedCard, cardIndex: cardIndex });
+        // Recorder: snapshot state BEFORE modifying hand (reflects what player saw)
+        recorder.recordMove(
+            { name: player.name, isRobo: player.isRobo || false, difficulty: player.difficulty || null, position: playerIndex },
+            recorder.buildVisibleState(gameState, playerIndex),
+            { type: 'playCard', card: { color: playedCard.color, value: playedCard.value } }
+        );
         player.hand.splice(cardIndex, 1); 
         const cardName = `${playedCard.color !== 'Black' ? playedCard.color + ' ' : ''}${playedCard.value}`; 
         addLog(`› ${player.name} played a ${cardName}.`); 
@@ -414,12 +429,13 @@ async function processRoboTurn() {
     if (!gameState || gameState.isPaused) return;
     if (['RoundOver', 'GameOver', 'Lobby'].includes(gameState.phase)) return;
 
-    // ── Dealing phase: robo auto-deals 7 cards ─────────────────────────────
+    // ── Dealing phase: robo deals a random number of cards (1–13) ────────────
     if (gameState.phase === 'Dealing') {
         const dealer = gameState.players.find(p => p.playerId === gameState.playerChoosingActionId);
         if (!dealer?.isRobo) return;
-        addLog(`🤖 ${dealer.name} (AI Dealer) deals 7 cards.`);
-        gameState.numCardsToDeal = 7;
+        const numCards = Math.floor(Math.random() * 13) + 1;
+        addLog(`🤖 ${dealer.name} (AI Dealer) deals ${numCards} cards.`);
+        gameState.numCardsToDeal = numCards;
         gameState.playerChoosingActionId = null;
         gameState = startNewRound(gameState);
         io.emit('updateGameState', gameState);
@@ -571,6 +587,12 @@ function executeDrawCard(playerIndex, personalAnnounce, personalEmit) {
     // ── 1. Draw penalty (Draw Two / Wild Draw Four) ──────────────────────────
     if (gameState.drawPenalty > 0) {
         const penalty = gameState.drawPenalty;
+        // Recorder: log that player is accepting a forced penalty draw
+        recorder.recordMove(
+            { name: player.name, isRobo: player.isRobo || false, difficulty: player.difficulty || null, position: playerIndex },
+            recorder.buildVisibleState(gameState, playerIndex),
+            { type: 'acceptPenalty', penaltyCount: penalty }
+        );
         let cardsDrawn = 0;
         for (let i = 0; i < penalty; i++) {
             const card = drawOneCard(gameState);
@@ -597,6 +619,12 @@ function executeDrawCard(playerIndex, personalAnnounce, personalEmit) {
 
     // ── 2. Pick Until ─────────────────────────────────────────────────────────
     if (gameState.pickUntilState?.active && gameState.pickUntilState.targetPlayerIndex === playerIndex) {
+        // Recorder: log each pick-until draw attempt
+        recorder.recordMove(
+            { name: player.name, isRobo: player.isRobo || false, difficulty: player.difficulty || null, position: playerIndex },
+            recorder.buildVisibleState(gameState, playerIndex),
+            { type: 'drawPickUntil', targetColor: gameState.pickUntilState.targetColor }
+        );
         const drawnCard = drawOneCard(gameState);
         if (drawnCard) {
             player.hand.push(drawnCard);
@@ -641,7 +669,12 @@ function executeDrawCard(playerIndex, personalAnnounce, personalEmit) {
         personalAnnounce('You have a playable card in your hand. You must play it.');
         return true; // Early return: don't change state, don't broadcast
     }
-
+    // Recorder: player chose to draw (no legal card, or strategic draw)
+    recorder.recordMove(
+        { name: player.name, isRobo: player.isRobo || false, difficulty: player.difficulty || null, position: playerIndex },
+        recorder.buildVisibleState(gameState, playerIndex),
+        { type: 'drawCard' }
+    );
     const drawnCard = drawOneCard(gameState);
     if (drawnCard) {
         io.emit('animateDraw', { playerId: player.playerId, count: 1 });
@@ -701,7 +734,13 @@ function executeDrawCard(playerIndex, personalAnnounce, personalEmit) {
 function executeColorChosen(playerId, color) {
     const choosingPlayer = gameState.players.find(p => p.playerId === playerId);
     if (!choosingPlayer || gameState.playerChoosingActionId !== choosingPlayer.playerId) return;
-
+    const choosingIndex = gameState.players.findIndex(p => p.playerId === playerId);
+    // Recorder: log colour choice (follow-on from playing a Wild)
+    recorder.recordMove(
+        { name: choosingPlayer.name, isRobo: choosingPlayer.isRobo || false, difficulty: choosingPlayer.difficulty || null, position: choosingIndex },
+        recorder.buildVisibleState(gameState, choosingIndex),
+        { type: 'chooseColor', color }
+    );
     addLog(`🎨 ${choosingPlayer.name} chose the color ${color}.`);
     gameState.activeColor = color;
     const wasDealerChoosingFirstCard =
@@ -745,6 +784,12 @@ function executePickUntilChoice(playerId, choice) {
 
     const originalPlayerIndex = gameState.players.findIndex(p => p.playerId === playerId);
     const numPlayers = gameState.players.length;
+    // Recorder: log pick-until action choice
+    recorder.recordMove(
+        { name: player.name, isRobo: player.isRobo || false, difficulty: player.difficulty || null, position: originalPlayerIndex },
+        recorder.buildVisibleState(gameState, originalPlayerIndex),
+        { type: 'pickUntilChoice', choice }
+    );
 
     if (choice === 'discard-wilds') {
         const msg = `🌪️ ${player.name} chose 'All players discard Wilds'!`;
@@ -812,7 +857,14 @@ function executeSwapHandsChoice(playerId, targetPlayerId) {
     const choosingPlayer = gameState.players.find(p => p.playerId === playerId);
     if (!choosingPlayer || gameState.playerChoosingActionId !== choosingPlayer.playerId) return;
 
-    const targetPlayer = gameState.players.find(p => p.playerId === targetPlayerId && p.status === 'Active');
+    const choosingIndex = gameState.players.findIndex(p => p.playerId === playerId);
+    const targetPlayer  = gameState.players.find(p => p.playerId === targetPlayerId && p.status === 'Active');
+    // Recorder: log swap choice (state captured before hands are swapped)
+    recorder.recordMove(
+        { name: choosingPlayer.name, isRobo: choosingPlayer.isRobo || false, difficulty: choosingPlayer.difficulty || null, position: choosingIndex },
+        recorder.buildVisibleState(gameState, choosingIndex),
+        { type: 'swapHands', targetPlayerName: targetPlayer?.name || targetPlayerId }
+    );
     if (choosingPlayer && targetPlayer) {
         io.emit('animateSwap', { p1_id: choosingPlayer.playerId, p2_id: targetPlayer.playerId });
         [choosingPlayer.hand, targetPlayer.hand] = [targetPlayer.hand, choosingPlayer.hand];
@@ -1070,6 +1122,7 @@ io.on('connection', (socket) => {
     } 
     
     gameState = setupGame(activePlayers); 
+    recorder.startGame(activePlayers); // Recorder: new game beginning
     
     // --- *** MODIFIED: Host is now always index 0 *** ---
     const newDealerIndex = 0; // Host is always first player in array
@@ -1264,5 +1317,26 @@ io.on('connection', (socket) => {
 
 }); // End of io.on('connection', ...)
 
+// --- TEMPORARY: MongoDB Atlas connection test ---
+app.get('/test-db', async (req, res) => {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) {
+        return res.send('❌ MONGODB_URI environment variable is not set on this server.');
+    }
+    try {
+        const client = new MongoClient(uri);
+        await client.connect();
+        await client.db('admin').command({ ping: 1 });
+        await client.close();
+        res.send('✅ MongoDB Atlas connection successful. Ready to record games.');
+    } catch (err) {
+        res.send(`❌ Connection failed: ${err.message}`);
+    }
+});
+// --- END TEMPORARY test endpoint ---
+
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => { console.log(`✅ UNO Server is live and listening on port ${PORT}`); });
+server.listen(PORT, () => {
+    console.log(`✅ UNO Server is live and listening on port ${PORT}`);
+    recorder.connect().catch(err => console.error('[Recorder] Startup connection error:', err));
+});
