@@ -330,7 +330,13 @@ window.addEventListener('DOMContentLoaded', () => {
         gameBoard.style.display = 'none'; 
         endOfRoundDiv.style.display = 'none';
         
-        hideWinnerAnnouncement(); // NEW
+        hideWinnerAnnouncement();
+        
+        // Clear the persisted player ID so a fresh browser window after game-over
+        // does not auto-rejoin the old session (ghost host fix).
+        // The name is kept so the join input is still pre-filled for convenience.
+        sessionStorage.removeItem('unoPlayerId');
+        myPersistentPlayerId = null;
         
         renderFinalScores(finalGameState); 
         finalScoreModal.style.display = 'flex'; 
