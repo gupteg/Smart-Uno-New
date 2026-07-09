@@ -29,8 +29,10 @@ const DISCONNECT_GRACE_PERIOD = 60000; // 60 seconds
 const HOST_PASSWORD = process.env.HOST_PASSWORD || null;
 
 // --- BRANCH C: Robo AI runtime state ---
-const ROBO_THINK_TIME = 9000; // ms delay before robo acts (visual readability)
-const ROBO_TIMEOUT    = 10000; // ms allowed for strategy.makeMove() to resolve
+const ROBO_THINK_TIME     = 10000; // ms — first voluntary action (player sees robo "thinking")
+const ROBO_SECONDARY_TIME =  1000; // ms — follow-on actions (color choice, swap target, pick-until each draw)
+const ROBO_PENALTY_TIME   =  3000; // ms — forced penalty draw (Draw Two / Wild Draw Four on robo)
+const ROBO_TIMEOUT        = 10000; // ms — max allowed for strategy.makeMove() to resolve
 let roboInstances  = new Map(); // Map<playerId, RoboPlayer> — never serialised to client
 let roboTurnPending = false;    // Prevents double-scheduling
 // --- END BRANCH C state ---
@@ -324,6 +326,46 @@ function recordCardForRoboMemories(card, playerName) {
 }
 
 /**
+ * Return the appropriate delay before the next robo action.
+ *
+ * ROBO_THINK_TIME     (10s) — first voluntary action on the robo's turn
+ * ROBO_PENALTY_TIME    (3s) — forced penalty draw (Draw Two / Wild Draw Four)
+ * ROBO_SECONDARY_TIME  (1s) — all follow-on actions (colour choice, swap, pick-until draws, dealing)
+ *
+ * Called inside scheduleRoboTurnIfNeeded so that the delay is evaluated against
+ * the game state at the moment the next robo action is being scheduled, not
+ * when it eventually executes.
+ */
+function getRoboDelay() {
+    if (!gameState) return ROBO_THINK_TIME;
+
+    const phase = gameState.phase;
+
+    // Follow-on choices — always fast
+    if (['ChoosingColor', 'ChoosingPickUntilAction', 'ChoosingSwapHands', 'Dealing'].includes(phase)) {
+        return ROBO_SECONDARY_TIME;
+    }
+
+    if (phase === 'Playing') {
+        // Forced penalty draw — bitter pill pause
+        if (gameState.drawPenalty > 0) {
+            return ROBO_PENALTY_TIME;
+        }
+
+        // Pick-Until successive draws (robo is the target, not the chooser) — mechanical, fast
+        if (gameState.pickUntilState?.active &&
+            gameState.pickUntilState.targetPlayerIndex === gameState.currentPlayerIndex) {
+            return ROBO_SECONDARY_TIME;
+        }
+
+        // First voluntary action on this robo's turn
+        return ROBO_THINK_TIME;
+    }
+
+    return ROBO_THINK_TIME; // safe fallback
+}
+
+/**
  * Schedule a robo turn if the player who must act next is a Robo.
  * Idempotent — roboTurnPending flag prevents double-scheduling.
  * Safe to call after every io.emit('updateGameState').
@@ -349,6 +391,7 @@ function scheduleRoboTurnIfNeeded() {
     }
 
     if (actionPlayer) {
+        const delay = getRoboDelay(); // tiered: 10s think / 3s penalty / 1s follow-on
         roboTurnPending = true;
         setTimeout(() => {
             roboTurnPending = false;
@@ -357,7 +400,7 @@ function scheduleRoboTurnIfNeeded() {
                     console.error(`[Robo] Unhandled error in processRoboTurn:`, err)
                 );
             }
-        }, ROBO_THINK_TIME);
+        }, delay);
     }
 }
 
