@@ -32,7 +32,7 @@ const DISCONNECT_GRACE_PERIOD = 60000; // 60 seconds
 const HOST_PASSWORD = process.env.HOST_PASSWORD || null;
 
 // --- BRANCH C: Robo AI runtime state ---
-const ROBO_THINK_TIME     = 10000; // ms — first voluntary action (player sees robo "thinking")
+const ROBO_THINK_TIME     = 7000; // ms — first voluntary action (player sees robo "thinking")
 const ROBO_SECONDARY_TIME =  1000; // ms — follow-on actions (color choice, swap target, pick-until each draw)
 const ROBO_PENALTY_TIME   =  3000; // ms — forced penalty draw (Draw Two / Wild Draw Four on robo)
 const ROBO_TIMEOUT        = 10000; // ms — max allowed for strategy.makeMove() to resolve
