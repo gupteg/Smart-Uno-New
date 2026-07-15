@@ -88,6 +88,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const roboConfigConfirmBtn = document.getElementById('robo-config-confirm-btn');
     const roboConfigSkipBtn    = document.getElementById('robo-config-skip-btn');
     const configureAIBtn       = document.getElementById('configure-ai-btn');
+    const shuffleSeatsBtn      = document.getElementById('shuffle-seats-btn');
 
 
     joinScreen.style.display = 'block';
@@ -102,6 +103,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
     joinGameBtn.addEventListener('click', () => { const playerName = playerNameInput.value.trim(); if (playerName) { sessionStorage.setItem('unoPlayerName', playerName); socket.emit('joinGame', { playerName, playerId: myPersistentPlayerId }); } else { alert('Please enter your name.'); } });
     playerList.addEventListener('click', (event) => { if (event.target.classList.contains('kick-btn')) { const playerIdToKick = event.target.dataset.playerId; socket.emit('kickPlayer', { playerIdToKick }); } });
+    // NEW: seat reorder buttons (host-only, delegated like kick-btn above)
+    playerList.addEventListener('click', (event) => {
+        if (event.target.classList.contains('seat-move-btn')) {
+            const playerId = event.target.dataset.playerId;
+            const direction = event.target.dataset.direction;
+            socket.emit('reorderPlayer', { playerId, direction });
+        }
+    });
     document.getElementById('left-column').addEventListener('click', (event) => { if (event.target.classList.contains('mark-afk-btn')) { playerIdToMarkAFK = event.target.dataset.playerId; const player = window.gameState?.players.find(p => p.playerId === playerIdToMarkAFK); if (player) { confirmAfkPlayerName.textContent = player.name; confirmAfkModal.style.display = 'flex'; } } });
     confirmAfkYesBtn.addEventListener('click', () => { if (playerIdToMarkAFK) { socket.emit('markPlayerAFK', { playerIdToMark: playerIdToMarkAFK }); } confirmAfkModal.style.display = 'none'; playerIdToMarkAFK = null; });
     confirmAfkNoBtn.addEventListener('click', () => { confirmAfkModal.style.display = 'none'; playerIdToMarkAFK = null; });
@@ -183,6 +192,13 @@ window.addEventListener('DOMContentLoaded', () => {
     gameLogOkBtn.addEventListener('click', () => {
         gameLogModal.style.display = 'none'; // Hide the modal
     });
+
+    // NEW: Shuffle Seats button (host-only, lobby-only, randomizes seat order)
+    if (shuffleSeatsBtn) {
+        shuffleSeatsBtn.addEventListener('click', () => {
+            socket.emit('shuffleSeats');
+        });
+    }
 
     // BRANCH C: Robo config modal listeners
     // Fix 3 — permanent Configure AI Players button (host lobby controls)
@@ -456,6 +472,28 @@ window.addEventListener('DOMContentLoaded', () => {
                  readyStatusSpan.innerHTML = '🔹 Waiting...';
             }
             statusDiv.appendChild(readyStatusSpan);
+
+            // NEW: Seat reorder buttons (host-only, shown on every row incl. host's own)
+            if (me.isHost) {
+                const seatIndex = currentLobbyPlayers.indexOf(player);
+                const upBtn = document.createElement('button');
+                upBtn.className = 'seat-move-btn';
+                upBtn.textContent = '▲';
+                upBtn.title = 'Move seat up';
+                upBtn.dataset.playerId = player.playerId;
+                upBtn.dataset.direction = 'up';
+                upBtn.disabled = (seatIndex === 0);
+                statusDiv.appendChild(upBtn);
+
+                const downBtn = document.createElement('button');
+                downBtn.className = 'seat-move-btn';
+                downBtn.textContent = '▼';
+                downBtn.title = 'Move seat down';
+                downBtn.dataset.playerId = player.playerId;
+                downBtn.dataset.direction = 'down';
+                downBtn.disabled = (seatIndex === currentLobbyPlayers.length - 1);
+                statusDiv.appendChild(downBtn);
+            }
 
             // Kick button logic (only host can kick, but host can't kick self)
             if (me.isHost && player.playerId !== myPersistentPlayerId) {
