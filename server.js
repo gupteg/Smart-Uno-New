@@ -1132,6 +1132,39 @@ io.on('connection', (socket) => {
   });
   // --- END BRANCH C addRobos handler ---
 
+  // --- NEW: reorderPlayer handler (host-only, lobby-only seat rearrangement) ---
+  socket.on('reorderPlayer', ({ playerId, direction }) => {
+    if (gameState) return; // Only valid pre-game (Lobby phase)
+    const host = players.find(p => p.socketId === socket.id && p.isHost);
+    if (!host) return socket.emit('announce', 'Only the host can rearrange seats.');
+    if (direction !== 'up' && direction !== 'down') return;
+
+    const idx = players.findIndex(p => p.playerId === playerId);
+    if (idx === -1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= players.length) return; // already at boundary, no-op
+
+    [players[idx], players[targetIdx]] = [players[targetIdx], players[idx]];
+    io.emit('lobbyUpdate', players);
+  });
+  // --- END reorderPlayer handler ---
+
+  // --- NEW: shuffleSeats handler (host-only, lobby-only random seat order) ---
+  socket.on('shuffleSeats', () => {
+    if (gameState) return;
+    const host = players.find(p => p.socketId === socket.id && p.isHost);
+    if (!host) return socket.emit('announce', 'Only the host can shuffle seats.');
+
+    // Fisher-Yates shuffle
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j], players[i]];
+    }
+    io.emit('lobbyUpdate', players);
+  });
+  // --- END shuffleSeats handler ---
+
   socket.on('setPlayerReady', () => { if (gameState) return; const player = players.find(p => p.socketId === socket.id); if (player && !player.isHost) { player.isReady = !player.isReady; io.emit('lobbyUpdate', players); } });
   socket.on('kickPlayer', ({ playerIdToKick }) => {
     if (gameState) return;
@@ -1172,8 +1205,10 @@ io.on('connection', (socket) => {
     gameState = setupGame(activePlayers); 
     recorder.startGame(activePlayers); // Recorder: new game beginning
     
-    // --- *** MODIFIED: Host is now always index 0 *** ---
-    const newDealerIndex = 0; // Host is always first player in array
+    // --- *** MODIFIED: Host may now be seated anywhere (seats are reorderable), ***
+    // --- *** so find the host's actual index rather than assuming 0. *** ---
+    let newDealerIndex = gameState.players.findIndex(p => p.isHost);
+    if (newDealerIndex === -1) newDealerIndex = 0; // safety fallback, should never happen
     gameState.dealerIndex = newDealerIndex; 
     // --- *** END MODIFICATION *** ---
 
