@@ -44,9 +44,10 @@ body {
 
 .kick-btn { padding: 4px 10px; font-size: 0.9em; font-weight: bold; color: white; background-color: #ff5555; border: 1px solid #cc4444; border-radius: 5px; cursor: pointer; margin-left: 10px; }
 .kick-btn:hover { background-color: #cc4444; }
-.seat-move-btn { padding: 2px 8px; font-size: 0.85em; font-weight: bold; color: white; background-color: #556b8c; border: 1px solid #445a77; border-radius: 5px; cursor: pointer; margin-left: 6px; }
+.seat-move-btn { padding: 0; width: 20px; height: 20px; line-height: 18px; font-size: 0.7em; font-weight: bold; color: white; background-color: #556b8c; border: 1px solid #445a77; border-radius: 4px; cursor: pointer; margin-left: 4px; flex-shrink: 0; }
 .seat-move-btn:hover:not(:disabled) { background-color: #445a77; }
-.seat-move-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.seat-move-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+#player-list li > div:last-child { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
 
 .lobby-actions { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
 #ready-btn:disabled { background-color: #99cc99; border-color: #669966; cursor: not-allowed; }
@@ -519,6 +520,9 @@ body {
 /* --- *** END MODIFICATION *** --- */
 @media (max-width: 768px) {
     body { padding: 5px; padding-bottom: 240px; overflow-y: auto; }
+    #player-list li { flex-wrap: wrap; padding: 8px 10px; font-size: 1em; gap: 4px; }
+    .seat-move-btn { width: 18px; height: 18px; line-height: 16px; font-size: 0.65em; margin-left: 3px; }
+    .kick-btn { padding: 3px 8px; font-size: 0.8em; margin-left: 6px; }
     #game-board { flex-direction: column; padding-top: 40px; height: auto; }
     #left-column { flex: 1; padding-right: 0; gap: 8px; overflow-y: visible; }
     #right-column { flex: none; width: 100%; flex-direction: column; align-items: center; gap: 15px; padding: 5px 0; overflow-y: visible; min-width: 0; overflow-x: visible; }
