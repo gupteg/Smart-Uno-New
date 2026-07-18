@@ -13,6 +13,11 @@
 
 const COLORS = ['Red', 'Green', 'Blue', 'Yellow'];
 
+// --- Pick-Until 'discard-wilds' vs 'pick-color' decision tuning ---
+const TOTAL_WILD_FAMILY_CARDS = 13; // 4 Wild + 4 Wild Draw Four + 4 Wild Pick Until + 1 Wild Swap
+const LARGE_HAND_THRESHOLD = 7; // opponent avg hand size considered "large" (risk signal)
+const SMALL_HAND_VULNERABLE_THRESHOLD = 4; // own hand size at/below which we have more to protect
+
 class DecisionEngine {
 
     /**
@@ -208,6 +213,93 @@ class DecisionEngine {
         if (card.color === 'Black' && !threat && player.hand.length > 3) ev -= 15;
 
         return ev;
+    }
+
+    /**
+     * EXPERT: Decide whether a Wild Pick Until card is better used to strip
+     * every opponent's Wild-family cards ('discard-wilds') rather than the
+     * default single-target draw-until-color attack ('pick-color').
+     *
+     * Uses ONLY publicly visible information: opponents' hand sizes, the
+     * robo's own hand, the draw pile size, and cards already seen this
+     * round via memory. Never reads another player's actual hand contents.
+     *
+     * Weighs three public signals:
+     *  1. Estimated Wild-family cards likely sitting in opponents' hands
+     *     (deck total minus wilds played minus our own wilds, scaled by
+     *     the public ratio of opponent-cards vs draw-pile-cards).
+     *  2. Average opponent hand size ("large hands" risk signal).
+     *  3. Our own vulnerability (smaller hand = more to protect from a
+     *     future Wild Draw Four / Wild Swap landing on us).
+     *
+     * @param {object} gs - Game state
+     * @param {number} playerIndex - Robo's index in gs.players
+     * @param {object} memory - CardMemory instance
+     * @returns {boolean} true → choose 'discard-wilds', false → choose 'pick-color'
+     */
+    static shouldDiscardOpponentWilds(gs, playerIndex, memory) {
+        const player = gs.players[playerIndex];
+        const opponents = gs.players.filter((p, i) => i !== playerIndex && p.status === 'Active');
+        if (opponents.length === 0) return false;
+
+        // Don't override an immediate direct-attack opportunity on the next player.
+        const threat = DecisionEngine.findThreateningPlayer(gs.players, playerIndex, 2);
+        if (threat) return false;
+
+        // Estimate unseen Wild-family cards (not yet played, not in our own hand).
+        const ownWilds = player.hand.filter(c => c.color === 'Black').length;
+        const wildsPlayed = memory.getWildsPlayedCount();
+        const unseenWilds = Math.max(0, TOTAL_WILD_FAMILY_CARDS - wildsPlayed - ownWilds);
+        if (unseenWilds === 0) return false; // nothing left to strip from opponents
+
+        // Probability-weighted share of those unseen wilds likely in opponents'
+        // hands vs. the draw pile, using only public card counts.
+        const totalOpponentCards = opponents.reduce((sum, p) => sum + p.hand.length, 0);
+        const drawPileSize = gs.drawPile.length;
+        const denominator = totalOpponentCards + drawPileSize;
+        const opponentShare = denominator > 0 ? totalOpponentCards / denominator : 0;
+        const estimatedOpponentWilds = unseenWilds * opponentShare;
+
+        // "Large hands" signal.
+        const avgOpponentHandSize = totalOpponentCards / opponents.length;
+
+        // Our own vulnerability — smaller hand means more to lose to a future
+        // Wild Draw Four / Wild Swap, so the defensive payoff is worth more.
+        const ownVulnerability = player.hand.length <= SMALL_HAND_VULNERABLE_THRESHOLD ? 1 : 0.5;
+
+        const score =
+            (estimatedOpponentWilds / TOTAL_WILD_FAMILY_CARDS) * 0.5 +
+            (Math.min(avgOpponentHandSize / LARGE_HAND_THRESHOLD, 1)) * 0.3 +
+            ownVulnerability * 0.2;
+
+        return score >= 0.55; // tuned to fire only when evidence is genuinely strong
+    }
+
+    /**
+     * HARD: Simpler, rule-of-thumb version of shouldDiscardOpponentWilds —
+     * direct threshold checks on public hand sizes only, no probability
+     * weighting of unseen wilds. Consistent with how Hard makes its other
+     * decisions elsewhere (direct comparisons, not weighted scoring).
+     *
+     * @param {object} gs
+     * @param {number} playerIndex
+     * @returns {boolean} true → choose 'discard-wilds', false → choose 'pick-color'
+     */
+    static shouldDiscardOpponentWildsSimple(gs, playerIndex) {
+        const player = gs.players[playerIndex];
+        const opponents = gs.players.filter((p, i) => i !== playerIndex && p.status === 'Active');
+        if (opponents.length === 0) return false;
+
+        // Don't override an immediate direct-attack opportunity on the next player.
+        const threat = DecisionEngine.findThreateningPlayer(gs.players, playerIndex, 2);
+        if (threat) return false;
+
+        const avgOpponentHandSize = opponents.reduce((sum, p) => sum + p.hand.length, 0) / opponents.length;
+        const ownHandSmall = player.hand.length <= SMALL_HAND_VULNERABLE_THRESHOLD;
+
+        // Fire only in the clear-cut case: we have relatively little hand-size
+        // to protect, and opponents are visibly loaded up with cards.
+        return ownHandSmall && avgOpponentHandSize >= LARGE_HAND_THRESHOLD;
     }
 }
 

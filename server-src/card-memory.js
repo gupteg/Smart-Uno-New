@@ -67,6 +67,19 @@ class CardMemory {
     }
 
     /**
+     * Count how many Wild-family cards (color === 'Black') have been played
+     * to the discard pile so far this round. Used to estimate how many of
+     * the deck's 13 Wild-family cards remain unseen (draw pile + hands).
+     * NOTE: only reflects cards actually retained in memory (bounded by
+     * maxCards for Easy/Normal); Hard/Expert have Infinity so this is a
+     * true full-round count for those tiers.
+     * @returns {number}
+     */
+    getWildsPlayedCount() {
+        return this.playedCards.filter(entry => entry.color === 'Black').length;
+    }
+
+    /**
      * Reset memory at the start of a new round.
      */
     reset() {

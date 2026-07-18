@@ -211,7 +211,8 @@ class HardStrategy extends Strategy {
         }
 
         if (gs.phase === 'ChoosingPickUntilAction') {
-            return { type: 'pickUntilChoice', choice: 'pick-color' };
+            const discardWilds = DecisionEngine.shouldDiscardOpponentWildsSimple(gs, playerIndex);
+            return { type: 'pickUntilChoice', choice: discardWilds ? 'discard-wilds' : 'pick-color' };
         }
 
         if (gs.phase === 'ChoosingSwapHands') {
@@ -300,7 +301,8 @@ class ExpertStrategy extends Strategy {
         }
 
         if (gs.phase === 'ChoosingPickUntilAction') {
-            return { type: 'pickUntilChoice', choice: 'pick-color' };
+            const discardWilds = DecisionEngine.shouldDiscardOpponentWilds(gs, playerIndex, memory);
+            return { type: 'pickUntilChoice', choice: discardWilds ? 'discard-wilds' : 'pick-color' };
         }
 
         if (gs.phase === 'ChoosingSwapHands') {
