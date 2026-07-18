@@ -94,10 +94,23 @@ function reshuffleDiscardIntoDraw(gs) {
 function drawOneCard(gs) {
     // If draw pile has cards, use them
     if (gs.drawPile.length > 0) {
-        return gs.drawPile.shift();
+        const card = gs.drawPile.shift();
+
+        // ENHANCEMENT: If that draw just emptied the pile, reshuffle immediately
+        // rather than waiting for the next draw to trigger it. This is purely
+        // an optical fix — the draw pile count should never visibly sit at 0
+        // when a reshuffle is possible; the reshuffle now happens the instant
+        // the pile hits empty, not on the following draw attempt.
+        if (gs.drawPile.length === 0) {
+            reshuffleDiscardIntoDraw(gs);
+        }
+
+        return card;
     }
-    
-    // Draw pile is empty: attempt reshuffle
+
+    // Draw pile is empty: attempt reshuffle.
+    // (Safety net for edge cases — e.g. very start of a round — since the
+    // proactive reshuffle above now handles the normal mid-game case.)
     if (reshuffleDiscardIntoDraw(gs)) {
         // Reshuffle succeeded: draw from newly populated pile
         if (gs.drawPile.length > 0) {
